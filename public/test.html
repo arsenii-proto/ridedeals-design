@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>design</title>
+  </head>
+  <body>
+  <script>
+  
+  function HtmlToDOM(html) {
+
+    const NODE = function(n, p) {
+
+      this !== window && (
+
+        this.parent   = p,
+        this.name     = n,
+        this.childs   = [],
+        this.attrs    = []
+      )
+    }
+
+    let dom = [], stack = [], next = -1, current = false, i = 0, bs = html.indexOf('<body'), be = html.indexOf('</body>') + 7;
+    let part = html.substring( bs >= 0 ? bs : 0, be >= 0 ? be : html.length )
+
+    while ( ( next = part.indexOf( '<' ) ) !== -1 ) {
+            
+      let last    = part.indexOf( '>' )
+      let between = part.substring( next, last + 1 );
+      let text    = part.substring( 0, next ).trim();
+        
+      if ( part[ next + 1 ] === '/' ) {
+
+        if ( current && text ) {
+
+          current.text = text;
+        }
+
+        if ( ( m = /^\<\/([A-z0-9\-]+)\>$/gm.exec( between ) ) !== null ) {
+
+          if ( stack[ stack.length - 1 ] === m[1] || stack.includes( m[1] ) ) {
+
+            stack.pop();
+            current = current.parent;
+
+          }
+        } 
+        
+      } else if (  part[ next + 1 ] !== '!'  ) {
+
+        const r   = /^\<([A-z0-9\-]+)\s*([A-z0-9\-]+\=[\'\"][^\"\'\>]*[\'\"]\s*)*\/?\>$/gm;
+        const r2  = /([A-z0-9\-]+)\=[\'\"]([^\"\'\>]*)[\'\"]\s*/gm;
+
+        if ( r.test(between) ) {
+
+          let that = new NODE( ( between + '' ).replace( r, '$1' ), current )
+          
+          if ( current ) {
+
+            current.childs.push( that )
+
+          } else {
+
+            dom.push( that )
+          }
+
+          current = that;
+
+          while ( ( m = r2.exec( between ) ) !== null ) {
+
+            m.index === r2.lastIndex && ( r2.lastIndex++ );
+            
+            current.attrs.push({
+
+              name: m[1],
+              value: m[2]
+
+            })
+
+          }
+
+          stack.push( current.name )
+
+          if ( [ 'area', 'base', 'br', 'col', 'command', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr' ].includes( current.name ) ) {
+
+            stack.pop();
+            current = current.parent;
+          }
+
+        }
+        
+      }
+      
+      part = part.substring( last + 1, part.length )
+
+      i++;
+    }
+
+    let parse = (r, q) => {
+
+      var matches = [], match;
+
+      while ( ( match = r.exec( q ) ) !== null ) {
+
+        match.index === r.lastIndex && r.lastIndex++;
+        matches.push( match );
+      }
+
+      return matches;
+    }
+
+    let areThisThat = (el, q) => {
+
+      if ( /^([A-Za-z0-9\-]+)/gm.test( q ) && ( parse( /^([A-Za-z0-9\-]+)/gm, q ) || [['','']] )[0][1] !== el.name ) {
+        
+        return false;
+      } 
+
+      let classes = ( el.attrs.find(attr => attr.name === 'class') || { value: '' } ).value.split(' ');
+
+      if ( /\.([A-Za-z0-9\-\_]+)/gm.test( q ) && !parse( /\.([A-Za-z0-9\-\_]+)/gm, q ).some(m => classes.includes(m[1])) ) {
+
+        return false;
+      }
+
+      let id = ( el.attrs.find(attr => attr.name === 'id') || { value: 'id' } ).value;
+
+      if ( /\#([A-Za-z0-9\-\_]+)/gm.test( q ) && ( parse( /\#([A-Za-z0-9\-\_]+)/gm, q ) || [['','']] )[0][1] !== id ) {
+
+        return false;
+      }
+
+      let attrs = {}
+
+      el.attrs.forEach(a => attrs[ a.name ] = a.value);
+
+      if ( 
+              /\[([^\]\=]+)\=?[\'\"]?([^\]\"\']+)?[\'\"]?\]/gm.test( q )
+          &&  !parse( /\[([^\]\=]+)\=?[\'\"]?([^\]\"\']+)?[\'\"]?\]/gm, q )
+                .some(m => ( ( m[ 1 ] in attrs ) && ( !m[ 2 ] || attrs[ m[ 1 ] ] === m[ 2 ] ) ) )
+        ) {
+
+        return false
+      }
+
+      return true;
+    }
+
+
+    let search = (l,q) => {
+
+      let L = [];
+
+      l.forEach(c => {
+
+        areThisThat(c, q) && L.push(c)
+
+        L = L.concat( search(c.childs || [], q) )
+
+      })
+
+      return L;
+    }
+
+    dom.search = q => {
+
+      var lasts = [ ...dom ];
+
+      q.split(' ').forEach(subQ => {
+
+        lasts = search(lasts, subQ)
+      })
+
+      return lasts;
+    }
+
+    NODE.search = function(q) {
+
+      var lasts = [ ...this.childs ];
+
+      q.split(' ').forEach(subQ => {
+
+        lasts = search(lasts, subQ)
+      })
+
+      return lasts;
+    }
+
+    return dom
+  }
+
+
+
+  document.onload = window.onload = () => {
+
+    // HtmlToDOM(`<form action="https://www.coastparts.com/search" method="get" role="form" class="search">
+  	//     	<!--- Banner -->
+    //       <div class="inner-banner">
+    //         <div class="yellow-navigation-wrp">
+    //           <div class="container">
+    //             <div class="yellow-navigation">
+    //               <ul>
+		// 			                        <li><a href="https://www.coastparts.com/sections/manufacturers" title="Dishwashers">Dishwashers</a></li>
+    //                     <li><a href="https://www.coastparts.com/sections/manufacturers" title="Dryers Range/Ovens">Dryers Range/Ovens</a></li>
+    //                     <li><a href="https://www.coastparts.com/sections/manufacturers" title="Refrigerators">Refrigerators</a></li>
+    //                     <li><a href="https://www.coastparts.com/sections/manufacturers" title="Washers">Washers</a></li>
+    //                     <li><a href="https://www.coastparts.com/sections/manufacturers" title="Microwaves">Microwaves</a></li>
+    //                     <li><a href="https://www.coastparts.com/sections/manufacturers" title="Range Hoods">Range Hoods</a></li>
+    //                     <li><a href="https://www.coastparts.com/sections/manufacturers" title="And More!">And More!</a></li>
+                	
+    //               </ul>
+    //             </div>
+    //           </div>
+    //         </div>
+    //         <div class="banner-container">
+    //           <div class="container">
+    //             <div class="banner-title">
+		// 								Find Your Appliance Parts</div>
+    //             <div class="banner-search">
+    //               <div class="input-group">
+    //                 <input class="form-control" id="search" name="q" placeholder="Enter your model number or part number ..." type="text">
+    //                 <span class="input-group-btn">
+    //                                     <input class="btn btn-default" type="submit" value="Search" />
+    //                 </span> </div>
+    //             </div>
+    //           </div>
+    //         </div>
+    //       </div>
+    //       <!--- /Banner -->
+    //    </form>`)
+   
+    let dom = HtmlToDOM("<!DOCTYPE html><html lang=\"en\"><head>    <meta charset=\"utf-8\">    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">    <title>FFDI501CMS Frigidaire GrindPro 1/2 HP Corded Continuous Feed Waste Disposer, Blue  | Coast Appliance Parts</title>    <link href=\"https://www.coastparts.com/css/bootstrap.min.css\" rel=\"stylesheet\">    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:400,600,700,800\" rel=\"stylesheet\">    <link href=\"https://www.coastparts.com/css/owl.carousel.min.css\" rel=\"stylesheet\">    <link href=\"https://www.coastparts.com/css/style-20180201.css\" rel=\"stylesheet\" type=\"text/css\">    <link href=\"https://www.coastparts.com/css/custom-20180130.css\" rel=\"stylesheet\" type=\"text/css\">    <link href=\"https://www.coastparts.com/css/lumos-gallery.css\" rel=\"stylesheet\">                <link rel=\"stylesheet\" type=\"text/css\" href=\"https://www.coastparts.com/css/print.css\" media=\"print\" />	<scr"+"ipt src=\"https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js\"></scr"+"ipt>	<scr"+"ipt src=\"https://www.coastparts.com/js/bootstrap.min.js\"></scr"+"ipt>	<link rel=\"stylesheet\" href=\"https://www.coastparts.com/jqueryui/jquery-ui.css\">	    <scr"+"ipt src=\"https://www.coastparts.com/jqueryui/jquery.js\"></scr"+"ipt>    <scr"+"ipt src=\"https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js\"></scr"+"ipt>        <scr"+"ipt>        $(function() {        	$(\"#search\").autocomplete({            	source:'https://www.coastparts.com/lookup/jqueryui',            	delay: 500,             	minLength:3            });        	$(\"#search2\").autocomplete({            	source:'https://www.coastparts.com/lookup/jqueryui',            	delay: 500,             	minLength:3            });                    });         </scr"+"ipt>        <link rel=\"icon\" type=\"image/png\" href=\"https://www.coastparts.com/favicon.png\" />                Add fancyBox main JS and CSS files		   <scr"+"ipt type=\"text/javascr"+"ipt\" src=\"https://www.coastparts.com/fancybox/jquery.fancybox.pack.js?v=2.1.5\"></scr"+"ipt>	   <link rel=\"stylesheet\" type=\"text/css\" href=\"https://www.coastparts.com/fancybox/jquery.fancybox.css?v=2.1.5\" media=\"screen\" />	       <scr"+"ipt type=\"text/javascr"+"ipt\">	       $(document).ready(function() {			$('.fancybox').fancybox();		    });		   </scr"+"ipt>        <meta name=\"google-site-verification\" content=\"o0aBbITQlcZwI8Lbw9x0he9PhYEONC1FqcHWHDzwZ2I\" />    <scr"+"ipt type=\"text/javascr"+"ipt\">          var _gaq = _gaq || [];          _gaq.push(['_setAccount', 'UA-32709745-2']);          _gaq.push(['_trackPageview']);                  (function() {            var ga = document.createElement('scr"+"ipt'); ga.type = 'text/javascr"+"ipt'; ga.async = true;            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';            var s = document.getElementsByTagName('scr"+"ipt')[0]; s.parentNode.insertBefore(ga, s);          })();                </scr"+"ipt>            	            HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->    <!--[if lt IE 9]>      <scr"+"ipt src=\"https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js\"></scr"+"ipt>      <scr"+"ipt src=\"https://oss.maxcdn.com/respond/1.4.2/respond.min.js\"></scr"+"ipt>    <![endif]-->        <scr"+"ipt src='https://www.coastparts.com/js/custom.js'></scr"+"ipt>       <!--[if lt IE 9]>      <scr"+"ipt src=\"https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js\"></scr"+"ipt>      <scr"+"ipt src=\"https://oss.maxcdn.com/respond/1.4.2/respond.min.js\"></scr"+"ipt>    <![endif]--></head><body><div id=\"wrapper\">     <!--- Header -->  <header>    <div class=\"header-top\">      <div class=\"container\">        <div class=\"header-top-container\">          <div class=\"logo\"><a href=\"https://www.coastparts.com\" title=\"Coast Appliance Parts\"><img src=\"https://www.coastparts.com/images/layout3/logo.png\" alt=\"Coast Appliance Parts Co.\"/></a></div>          <div class=\"year-logo hidden-sm hidden-xs\"><a href=\"https://www.coastparts.com\" title=\"Coast Appliance Parts\"><img src=\"https://www.coastparts.com/images/layout3/year-logo.png\" alt=\"Since 1958 Serving California\" /></a></div>          <div class=\"payment-icon visible-lg\"><img src=\"https://www.coastparts.com/images/layout3/payment-icon.png\" alt=\"\"/></div>          <div class=\"header-telephone\"><span class=\"hidden-sm hidden-xs\">Main:</span> 1-800-821-0244<br />Apartments: 1-800-370-4585</div>          <div class=\"header-cart\"><a href=\"https://www.coastparts.com/cart\" title=\"View Cart\"><span class=\"cart-title hidden-xs hidden-sm\">Cart</span><span class=\"cart-item\">0</span></a></div>                    <div class=\"header-login\">            <div class=\"dropdown\">              	              		<a href=\"https://www.coastparts.com/login\" class=\"layoutLogin btn btn-default dropdown-toggle dropdownLink\" title=\"Login\">Login</a><span style=\"color: #ffffff;\"> | </span><a class=\"layoutLogin btn btn-default dropdown-toggle dropdownLink\" href=\"https://www.coastparts.com/sections/request-login\" title=\"Request a Login\">Request a Login</a>&nbsp;               	               	            </div>          </div>                  </div>      </div>    </div>	    <div class=\"header-bottom\">      <div class=\"container\">        <div class=\"navigation\">          <nav class=\"navbar navbar-default\">            <div class=\"navbar-header\">              <button type=\"button\" class=\"navbar-toggle collapsed\" data-toggle=\"collapse\" data-target=\"#bs-example-navbar-collapse-1\" aria-expanded=\"false\"> <span class=\"sr-only\">Toggle navigation</span> <span class=\"icon-bar\"></span> <span class=\"icon-bar\"></span> <span class=\"icon-bar\"></span> </button>            </div>                        <div class=\"collapse navbar-collapse\" id=\"bs-example-navbar-collapse-1\">              <ul class=\"nav navbar-nav cl-effect-5\">                <li><a href=\"https://www.coastparts.com\" title=\"Home\">Home</a></li>                                                	                    	                    								                                <li><a href=\"https://www.coastparts.com/sections/about-us\" title=\"About Us\">About Us</a></li>                <li><a href=\"https://www.coastparts.com/locations\" title=\"Locations\">Locations</a></li>                <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Brands\">Brands</a></li>                <li><a href=\"https://www.coastparts.com/sections/employment\" title=\"Careers\">Careers</a></li>                <li><a href=\"https://www.coastparts.com/sections/cant-find\" title=\"Find a Part\">Find a Part</a></li>                <li><a href=\"https://www.coastparts.com/sections/contact-us\" title=\"Contact\">Contact</a></li>                              </ul>            </div>          </nav>        </div>      </div>    </div>  </header>  <!--- /Header -->     <!--- Banner -->	<form action=\"https://www.coastparts.com/search\" method=\"get\" role=\"form\" class=\"search\">  	    	<!--- Banner -->          <div class=\"inner-banner\">            <div class=\"yellow-navigation-wrp\">              <div class=\"container\" id=\"laa\">                <div class=\"yellow-navigation\">                  <ul>					                        <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Dishwashers\">Dishwashers</a></li>                        <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Dryers Range/Ovens\">Dryers Range/Ovens</a></li>                        <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Refrigerators\">Refrigerators</a></li>                        <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Washers\">Washers</a></li>                        <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Microwaves\">Microwaves</a></li>                        <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Range Hoods\">Range Hoods</a></li>                        <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"And More!\">And More!</a></li>                	                  </ul>                </div>              </div>            </div>            <div class=\"banner-container\">              <div class=\"container\" id=\"laa\">                <div class=\"banner-title\">										Find Your Appliance Parts</div>                <div class=\"banner-search\">                  <div class=\"input-group\">                    <input class=\"form-control\" id=\"search\" name=\"q\" placeholder=\"Enter your model number or part number ...\" type=\"text\">                    <span class=\"input-group-btn\">                                        <input class=\"btn btn-default\" type=\"submit\" value=\"Search\" />                    </span> </div>                </div>              </div>            </div>          </div>          <!--- /Banner -->        </form>    <div id=\"middle\">        <div class=\"contentMain\">					        <a name=\"top\"></a>        <div class=\"container\">					<h1 class=\"centerAlign\">FFDI501CMS Frigidaire GrindPro 1/2 HP Corded Continuous Feed Waste Disposer, Blue </h1>																																													            <div class=\"row\" style=\"padding: 0 20px;\">            	<div class=\"text-center hidden-md hidden-lg visible-sm visible-xs\"><p><a href=\"#primaryImage\">View Photo of Part</a></p></div>	    	<div class=\"col-md-6 col-sm-12 productLeft\">	    	    <div class=\"productDetailsRight\">                                            <p class=\"partDsc\">                		    			        		        			<strong>DISPOSER,1/2HP</strong>        		        		        	        	        		        			 - <strong>W/CORD</strong>        		        	        	</p>        	                            <div class=\"productPrice\">                                                    		                		      <p class=\"yourPrice\">Your Price: <strong><span class=\"text-primary\">$66.10</span></strong>                		                      		                      			<br /><span class=\"retailPrice\">Retail: $129.00</span><br /><br />                			                			</p>                                    </div>                                    <form action=\"https://www.coastparts.com/cart/add?redirect=/part/16069229\" method=\"post\">                        <div class=\"productAddToCart\">Qty: &nbsp; <input type=\"text\" class=\"text productQty\" name=\"quantities[FFDI501CMS]\" value=\"1\" /> &nbsp;                                 						<button type=\"submit\" class=\"btn btn-primary\"><span class=\"glyphicon glyphicon-shopping-cart\"></span> &nbsp; Add to Cart</button>                            <input type=\"hidden\" name=\"partNumbers[FFDI501CMS]\" value=\"FFDI501CMS\" />                            <input type=\"hidden\" name=\"productCodes[FFDI501CMS]\" value=\"FFDI501CMS\" />                            <input type=\"hidden\" name=\"lastPage[FFDI501CMS]\" value=\"/parts/FFDI501CMS\" />                                							<input type=\"hidden\" name=\"partIds[FFDI501CMS]\" value=\"16091956\" />    						    						<br /><br />Part Comment: &nbsp;<input type=\"text\" class=\"text partComment\" style=\"width: 150px;\" name=\"notes[FFDI501CMS]\" />                        </div>                    </form>                                                <h3>SKU: &nbsp; <span>FFDI501CMS</span></h3>                <div class=\"productStock\">                            				<span class=\"eighteen text-success\"><i class=\"glyphicon glyphicon-ok\"></i> &nbsp; <strong>In-Stock</strong></span>        			                                    </div>            </div>                    		<p class=\"content\">&nbsp;<br /><span style=\"font-size: 18px;\">Stock Total: <strong><span class=\"text-success\">33</strong></span></span></p>		<div class=\"row noPadding\">			<div class=\"col-md-6 col-sm-12 col-xs-12\">				<ul class=\"list-group locationStock\"> 												<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/BAK\" title=\"Bakersfield\">Bakersfield:</a></td>							<span class=\"badge badge-success\">1</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/COL\" title=\"Colton\">Colton:</a></td>							<span class=\"badge badge-success\">1</span>						</li>													<li class=\"list-group-item\">							<a href=\"https://www.coastparts.com/locations/CC\" title=\"Culver City\">Culver City:</a></td>							<span class=\"badge badge-\">0</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/FONT\" title=\"Fontana\">Fontana:</a></td>							<span class=\"badge badge-success\">16</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/FRES\" title=\"Fresno\">Fresno:</a></td>							<span class=\"badge badge-success\">1</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/GARD\" title=\"Gardena\">Gardena:</a></td>							<span class=\"badge badge-success\">2</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/LB\" title=\"Long Beach\">Long Beach:</a></td>							<span class=\"badge badge-success\">1</span>						</li>							</ul></div><div class=\"col-md-6 col-sm-12 col-xs-12\"><ul class=\"list-group locationStock\">						<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/LA\" title=\"Los Angeles\">Los Angeles:</a></td>							<span class=\"badge badge-success\">1</span>						</li>													<li class=\"list-group-item\">							<a href=\"https://www.coastparts.com/locations/SD\" title=\"San Diego\">San Diego:</a></td>							<span class=\"badge badge-\">0</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/SM\" title=\"San Marcos\">San Marcos:</a></td>							<span class=\"badge badge-success\">3</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/SA\" title=\"Santa Ana\">Santa Ana:</a></td>							<span class=\"badge badge-success\">2</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/SEM\" title=\"So. El Monte\">So. El Monte:</a></td>							<span class=\"badge badge-success\">2</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/VN\" title=\"Van Nuys\">Van Nuys:</a></td>							<span class=\"badge badge-success\">2</span>						</li>													<li class=\"list-group-item active\">							<a href=\"https://www.coastparts.com/locations/VIS\" title=\"Visalia\">Visalia:</a></td>							<span class=\"badge badge-success\">1</span>						</li>											</ul>			</div>		</div>																			                	        </div>    <div class=\"col-md-6 col-sm-12 productRight\">        	<div class=\"productImages col-md-12\">	           	        	                        <a id=\"primaryImage\" class=\"fancybox productImage\" href=\"https://www.coastparts.com/thumbnail/product/1557335/800/600/FFDI501CMS.jpg\" title=\"Click to Enlarge\"><img alt=\"Image of FFDI501CMS\" src=\"https://www.coastparts.com/thumbnail/product/1557335/530/400/FFDI501CMS.jpg\" class=\"img-responsive\" /></a>                                                                                                        <div class=\"clearBottom\"></div>        </div>                        </div> 	    	<div class=\"col-md-6 col-sm-12 paddingZero clearBoth\">    		<p class=\"productDescr"+"iption\">Garbage Disposal 1/2 HP w/ Cord</p>    	</div>		<div class=\"col-md-6 col-sm-12\">				<div class=\"col-md-6 col-sm-12\">            <h3 class=\"text-center\">Similar Products Found In</h3>            <div class=\"productCategories text-center\">     			    				<span class=\"glyphicon glyphicon-chevron-right\"></span> &nbsp; <strong><a href=\"https://www.coastparts.com/catalog/657220\" title=\"Plumbing &gt; Garbage Disposals\">Plumbing &gt; Garbage Disposals</a></strong><br />    			    				<span class=\"glyphicon glyphicon-chevron-right\"></span> &nbsp; <strong><a href=\"https://www.coastparts.com/catalog/660328\" title=\"WEB SPECIALS\">WEB SPECIALS</a></strong><br />    							<br /><br />			</div>		</div>                                        	</div>	</div>                                                            <p class=\"content clearfix\">&nbsp;</p>                                                                    </div>    </div>	     	                <!--- Logo Section -->        <div class=\"logo-section\">      <div class=\"container\">        <h2><span><strong>A Few of the Brands</strong></span> We Carry</h2>        <div class=\"row\">                    <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/bertazzoni.png\" alt=\"Bertazzoni\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/bosch.png\" alt=\"Bosch\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/dacor3.png\" alt=\"Dacor\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/electrolux.png\" alt=\"Electrolux\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/frigidaire.png\" alt=\"Frigidaire\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/ge-appliances.png\" alt=\"GE Appliances\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/lacornue.png\" alt=\"LaCornue\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/maytag.png\" alt=\"Maytag\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/speed-queen.png\" alt=\"Speed Queen\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/thermador.png\" alt=\"Thermador\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/whirlpool.png\" alt=\"Whirlpool\" class=\"img-responsive center-block\"/></a></div>          <div class=\"col-xs-6 col-sm-3 col-md-2 col-lg-2 brand-logo\"><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"View All Manufacturers\"><img src=\"https://www.coastparts.com/images/sections/manufacturers2/other-brands.png\" alt=\"Other Brands\" class=\"img-responsive center-block\"/></a></div>        </div>      </div>    </div>        <!--- /Logo Section -->         <!--- Call to action -->    <div class=\"call-to-action\">      <div class=\"container\">        <ul>          <li>          	<div class=\"visible-xs\">          		<a href=\"tel:1-800-821-0244\"><span class=\"icon-call\"></span> Questions? Call<br />1-800-821-0244</a>          	</div>          	<div class=\"hidden-xs\"><span class=\"icon-call\"></span> Questions? Call<br />1-800-821-0244</div>		  </li>          <li><a href=\"http://eepurl.com/kl23f\" target=\"_blank\" title=\"Coast Mailing List\"><span class=\"icon-newsletter\"></span> Coast<br />            Mailing List</a></li>          <li><a href=\"https://www.coastparts.com/sections/cant-find\" title=\"Find a Part\"><span class=\"icon-find\"></span> Looking<br />            for a part</a></li>          <li><span class=\"icon-like\"></span>Distributor<br />            Since 1958</li>        </ul>      </div>    </div>    <!--- /Call to action -->       </div>  <!--- /Middle -->     <!--- Footer -->  <footer>    <div class=\"container\" id=\"footer\">      <div class=\"row\">        <div class=\"col-xs-12 col-sm-4 col-md-3 footer-column\">          <h3>Who We Are</h3>          <div class=\"footer-nav\">            <ul>              <li><a href=\"https://www.coastparts.com/sections/about-us\" title=\"About Us\">About Us</a></li>              <li><a href=\"https://www.coastparts.com/locations\" title=\"Locations\">Locations</a></li>              <li><a href=\"https://www.coastparts.com/sections/manufacturers\" title=\"Brands\">Brands</a></li>              <li><a href=\"https://www.coastparts.com/sections/employment\" title=\"Careers\">Careers</a></li>              <li><a href=\"https://www.coastparts.com/sections/cant-find\" title=\"Find a Part\">Find a Part</a></li>              <li><a href=\"https://www.coastparts.com/sections/contact-us\" title=\"Contact\">Contact</a></li>			                            </ul>          </div>        </div>                <div class=\"col-xs-12 col-sm-4 col-md-3 footer-column\">          <h3>Contact Us</h3>          <div class=\"footer-contact footer-address\">Corporate Office<br />10680 Mulberry Ave.<br />            Fontana, CA<br />            92337<br />          </div>                    <div class=\"footer-contact footer-telephone\"><span class=\"hidden-xs\">Main:<br />1-800-821-0244</span> <span class=\"visible-xs\"><a href=\"tel:1-800-821-0244\">Main:<br />1-800-821-0244</a></span></div>                    <div class=\"footer-contact footer-telephone\"><span class=\"hidden-xs\">Apartments:<br />1-800-370-4585</span> <span class=\"visible-xs\"><a href=\"tel:1-800-370-4585\">Apartments:<br />1-800-370-4585</a></span></div>                    <div class=\"footer-contact footer-email\"><a href=\"mailto:parts@coastparts.com\">parts@coastparts.com</a></div>          <div style=\"padding-top: 20px; clear: both;\"><a href=\"http://www.apda.com/login/distributor/672/07d684f5314eb2b4f134bf2af69d9360\" target=\"_blank\" title=\"APDA Part Finder\"><img src=\"https://www.coastparts.com/images/layout3/apda-part-finder.png\" width=\"190\" height=\"42\" alt=\"APDA Part Finder\" /></a></div>        </div>        <div class=\"col-xs-12 col-sm-12 col-md-3 footer-column \">                    <div class=\"footer-year visible-xs\"><img src=\"https://www.coastparts.com/images/layout3/year-logo.png\"  alt=\"\" class=\"img-responsive center-block\"/></div>          <div class=\"footer-payment-icon hidden-lg\"><img src=\"https://www.coastparts.com/images/layout3/payment-icon.png\"  alt=\"\" class=\"img-responsive center-block\"/></div>        </div>      </div>      <div class=\"col-xs-12 footer-bottom\">                <div class=\"footer-bottom-left\">          <div class=\"footer-bottom-link\">           <a href=\"https://www.coastparts.com/sections/site-policies\" title=\"Website Policies\">Website Policies</a> I <a href=\"https://www.coastparts.com/sections/terms-of-service\" title=\"Terms of Service\">Terms of Services</a> I <a href=\"https://www.coastparts.com/sections/privacy-policy\" title=\"Privacy Policy\">Privacy Policy </a> </div>          <div class=\"copyright\">Copyright &copy;  2017 Coast Appliance Parts.  All Rights Reserved.</div>        </div>      </div>    </div>  </footer>  <!--- /Footer --> </div> <scr"+"ipt src=\"https://www.coastparts.com/js/bootstrap.min.js\"></scr"+"ipt><scr"+"ipt src=\"https://www.coastparts.com/js/app.js\"></scr"+"ipt> </body></html>")
+    // HtmlToDOM("<body></body>")
+
+    console.log( dom )
+    console.log( dom.search( '#laa' ) )
+  }
+  
+  </script>   
+  </body>
+</html>
